@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"terminal.integrated.env.osx": {
+			"PATH": "/Users/dave/.platformio/penv/bin:/Users/dave/.platformio/penv:/Users/dave/esp/xtensa-esp32-elf/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/share/dotnet:~/.dotnet/tools:/Library/Frameworks/Mono.framework/Versions/Current/Commands",
+			"PLATFORMIO_CALLER": "vscode"
+		}
+	}
+}
