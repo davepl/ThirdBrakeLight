@@ -48,8 +48,19 @@ public:
         _width(w)
   {
     _pLEDs = static_cast<CRGB *>(calloc(w , sizeof(CRGB)));
-    FastLED.addLeds<WS2812B, LED_PIN, GRB>(_pLEDs, w);
-    FastLED.setBrightness(127);    
+    // NOTE: Do NOT call FastLED.addLeds() here. This object is constructed as
+    // a global, which runs before the Arduino framework has fully initialized
+    // peripheral clocks / RMT / I2C on the ESP32-S3. Initializing FastLED that
+    // early can leave the I2C peripheral in a bad state, which prevents the
+    // on-board OLED (which shares the I2C bus init path in Heltec.begin())
+    // from ever responding. Defer to Begin() called from setup().
+  }
+
+  // Call from setup() AFTER the Arduino framework is up.
+  void Begin()
+  {
+    FastLED.addLeds<WS2812B, LED_PIN, GRB>(_pLEDs, _width);
+    FastLED.setBrightness(255);
   }
 
   void ShowStrip()

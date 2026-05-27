@@ -1,28 +1,13 @@
 // * Copyright 2019 Dave Plummer
 
 #include <Arduino.h>
-#include <SPI.h>
-#include <U8g2lib.h>              // So we can talk to the CUU text
-#define FASTLED_INTERNAL 1        // Quiet the FastLED compiler banner
-#include <FastLED.h>              // FastLED for the LED panels
-#include <pixeltypes.h>           // Handy color and hue stuff
-#include <gfxfont.h>              // Adafruit GFX for the panels
-#include <Fonts/FreeSans9pt7b.h>  // A nice font for the VFD
-#include <Adafruit_GFX.h>         // GFX wrapper so we can draw on matrix
-#include "./globals.h"
-#include "./wrover_kit_lcd.h"
+#define FASTLED_INTERNAL 1 // Quiet the FastLED compiler banner
 #include "./LEDStripGFX.h"
 #include "./LightingEvents.h"
-
-#if USE_TFT
-	#if SMALL_TFT
-		U8G2_SSD1306_128X64_NONAME_F_SW_I2C g_TFT(U8G2_R2, 15, 4, 16);
-		//U8G2_SSD1306_128X64_NONAME_F_HW_I2C g_TFT(U8G2_R2, /*reset*/ 16, /*clk*/ 15, /*data*/ 4);
-
-	#else
-		WROVER_KIT_g_TFT g_TFT;
-	#endif
-#endif
+#include "./globals.h"
+#include <FastLED.h>             // FastLED for the LED panels
+#include <heltec.h>
+#include <pixeltypes.h>          // Handy color and hue stuff
 
 #ifndef LED_BUILTIN
 // Set LED_BUILTIN if it is not defined by Arduino framework
@@ -33,46 +18,53 @@
 
 // 5:6:5 Color definitions
 
-#define BLACK16   0x0000
-#define BLUE16    0x001F
-#define RED16     0xF800
-#define GREEN16   0x07E0
-#define CYAN16    0x07FF
+#define BLACK16 0x0000
+#define BLUE16 0x001F
+#define RED16 0xF800
+#define GREEN16 0x07E0
+#define CYAN16 0x07FF
 #define MAGENTA16 0xF81F
-#define YELLOW16  0xFFE0
-#define WHITE16   0xFFFF
+#define YELLOW16 0xFFE0
+#define WHITE16 0xFFFF
 
-// Global brightness scalar - everthing you do is ultimately multiplied by this fraction of 255
+// Global brightness scalar - everthing you do is ultimately multiplied by this
+// fraction of 255
 
-const byte g_Brightness = 24;
+const byte g_Brightness = 255;
 
 // mapFloat
 //
-// Given an input value x that can range from in_min to in_max, maps return output value between out_min and out_max
+// Given an input value x that can range from in_min to in_max, maps return
+// output value between out_min and out_max
 
-float mapFloat(float x, float in_min, float in_max, float out_min, float out_max)
-{
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+float mapFloat(float x, float in_min, float in_max, float out_min,
+               float out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-LEDStripGFX 	g_Strip(NUM_LEDS);
+LEDStripGFX g_Strip(NUM_LEDS);
 
-BrakingEvent 	g_Braking(&g_Strip,   0);
-BackupEvent  	g_Backup(&g_Strip,    BACKUP_PIN);
-SignalEvent  	g_LeftTurn(&g_Strip,  LEFT_TURN_PIN, 	SignalEvent::SIGNAL_STYLE::LEFT_TURN);
-SignalEvent  	g_RightTurn(&g_Strip, RIGHT_TURN_PIN,   SignalEvent::SIGNAL_STYLE::RIGHT_TURN);
-PoliceLightBar 	g_Emergency(&g_Strip, EMERGENCY_PIN);
+BrakingEvent g_Braking(&g_Strip, 0);
+BackupEvent g_Backup(&g_Strip, BACKUP_PIN);
+SignalEvent g_LeftTurn(&g_Strip, LEFT_TURN_PIN,
+                       SignalEvent::SIGNAL_STYLE::LEFT_TURN);
+SignalEvent g_RightTurn(&g_Strip, RIGHT_TURN_PIN,
+                        SignalEvent::SIGNAL_STYLE::RIGHT_TURN);
+PoliceLightBar g_Emergency(&g_Strip, EMERGENCY_PIN);
 
-LightingEvent *	g_pAllEffects[] = {  &g_Emergency, &g_Braking, &g_LeftTurn, &g_RightTurn, &g_Backup };
+LightingEvent *g_pAllEffects[] = {&g_Emergency, &g_Braking, &g_LeftTurn,
+                                  &g_RightTurn, &g_Backup};
 
-// The IRQ vectors do not include accomodation for any context or data, so you can't pass a "this" pointer, which means each
-// IRQ we set must go to a functon that then dispatches to the object in question.  It works!  IRAM_ATTR so they're always in RAM.
+// The IRQ vectors do not include accomodation for any context or data, so you
+// can't pass a "this" pointer, which means each IRQ we set must go to a functon
+// that then dispatches to the object in question.  It works!  IRAM_ATTR so
+// they're always in RAM.
 
-void IRAM_ATTR BrakingIRQ()		{	g_Braking.IRQ();	}
-void IRAM_ATTR BackupIRQ()		{	g_Backup.IRQ();		}
-void IRAM_ATTR LeftTurnIRQ()	{	g_LeftTurn.IRQ();	}
-void IRAM_ATTR RightTurnIRQ()	{	g_RightTurn.IRQ();	}
-void IRAM_ATTR EmergencyIRQ()	{	g_Emergency.IRQ();	}
+void IRAM_ATTR BrakingIRQ() { g_Braking.IRQ(); }
+void IRAM_ATTR BackupIRQ() { g_Backup.IRQ(); }
+void IRAM_ATTR LeftTurnIRQ() { g_LeftTurn.IRQ(); }
+void IRAM_ATTR RightTurnIRQ() { g_RightTurn.IRQ(); }
+void IRAM_ATTR EmergencyIRQ() { g_Emergency.IRQ(); }
 
 // IMPORTANT: To reduce NeoPixel burnout risk, add 1000 uF capacitor across
 // pixel power leads, add 300 - 500 Ohm resistor on first pixel's data input
@@ -83,175 +75,172 @@ void IRAM_ATTR EmergencyIRQ()	{	g_Emergency.IRQ();	}
 // far we are into it's animation, etc.
 
 unsigned long backupStartTime = 0;
-unsigned long brakeStartTime  = 0;
-unsigned long turnStartTime   = 0;
+unsigned long brakeStartTime = 0;
+unsigned long turnStartTime = 0;
 
-#if USE_TFT
-	#if SMALL_TFT
-		class UI
-		{
-			public:
+bool ButtonPressed(uint8_t pin) { return digitalRead(pin) == LOW; }
 
-			void DrawIndicators()
-			{
-				g_TFT.clearBuffer();						                // Clear the internal memory
-				g_TFT.setFont(u8g2_font_profont15_tf);          // Choose a suitable font 9px tall
-				g_TFT.setCursor(0,10);
-				g_TFT.printf("L%s B%s R%s Bk%s E%s", 
-					g_LeftTurn.GetActive()  ? "*" : ".",
-					g_Braking.GetActive()   ? "*" : ".",
-					g_RightTurn.GetActive() ? "*" : ".",
-					g_Backup.GetActive()    ? "*" : ".",
-					g_Emergency.GetActive() ? "*" : ".");
-				g_TFT.sendBuffer();
-			}
-		};
+class UI {
+public:
+  void DrawIndicators() {
+    static int pass = 0;
 
-	#else
-		class UI
-		{
-		protected:
+    char line[64];
+    char counter[16];
 
-			void DrawIndicator(int16_t x, int16_t y, CRGB color)
-			{
-			g_TFT.drawCircle(x, y, 10, ILI9341_LIGHTGREY);
-			g_TFT.fillCircle(x, y, 8, g_TFT.color565(color.r, color.g, color.b));
-			}
-		
-		public:
+    snprintf(line, sizeof(line), "L%s B%s R%s Bk%s E%s",
+             ButtonPressed(LEFT_TURN_PIN) ? "*" : ".",
+             g_Braking.GetActive() ? "*" : ".",
+             ButtonPressed(RIGHT_TURN_PIN) ? "*" : ".",
+             ButtonPressed(BACKUP_PIN) ? "*" : ".",
+             ButtonPressed(EMERGENCY_PIN) ? "*" : ".");
+    snprintf(counter, sizeof(counter), "%d", pass++);
 
-			void DrawIndicators()
-			{
-			g_TFT.setCursor(0, 15);
-			g_TFT.print("    Left    Stop     Right   Back\n\n\n");
-			DrawIndicator(g_TFT, 30, 40, g_LeftTurn.GetActive() ? CRGB::Green : CRGB::Black);
-			DrawIndicator(g_TFT, 90, 40, g_Braking.GetActive() ? CRGB::Red : CRGB::Black);
-			DrawIndicator(g_TFT, 150, 40, g_RightTurn.GetActive() ? CRGB::Green : CRGB::Black);
-			DrawIndicator(g_TFT, 210, 40, g_Backup.GetActive() ? CRGB::Grey : CRGB::Black);
+    Heltec.display->clear();
+    Heltec.display->drawString(0, 0, line);
+    Heltec.display->drawString(0, 16, counter);
+    Heltec.display->display();
+  }
+};
 
-			g_TFT.print("                  Emergency\n\n\n");
-			DrawIndicator(g_TFT, 150, 100, g_Emergency.GetActive() ? CRGB::Red : CRGB::Black);
- 
-			g_TFT.fillRect(0, 130, 200, 20, tft.color565(12, 13, 62));
-
-			g_TFT.printf("FPS: %d", FastLED.getFPS());
-			}
-		};	
-	#endif
-#endif
-
-#if USE_TFT
 UI g_UI;
+
+void DrawBootScreen() {
+  Heltec.display->clear();
+  Heltec.display->drawString(0, 0, "ThirdBrakeLight");
+  Heltec.display->drawString(0, 16, "Heltec WiFi Kit 32 V3");
+  Heltec.display->display();
+
+  g_Strip.fillScreen(BLACK16);
+  g_Strip.fillScreen(WHITE16);
+  g_Strip.ShowStrip();
+
+  delay(1500);
+}
 
 // displayLoop
 //
-// The display loop is just a thread that sits and draws the display over and over forever.
+// The display loop is just a thread that sits and draws the display over and
+// over forever.
 
-void displayLoop(void *)
-{
-	g_TFT.clear();
-
-	for (;;)
-	{
-		g_UI.DrawIndicators();
-		delay(10);
-	}
+void displayLoop(void *) {
+  for (;;) {
+    g_UI.DrawIndicators();
+    delay(10);
+  }
 }
-#endif
 
 // setup
 //
-// Setup is called one time at chip boot, before loop(), to do... setup.  Like which
-// pins are input or output, setting up interrupts, and other one-time things.
+// Setup is called one time at chip boot, before loop(), to do... setup.  Like
+// which pins are input or output, setting up interrupts, and other one-time
+// things.
 
-void setup()
-{
-	Serial.begin(115200);
-	Serial.println("Dave's Garage ThirdBrakeLight Startup");
-	Serial.println("-------------------------------------");
+void setup() {
+  Serial.begin(115200);
 
-	Serial.println("Configuring Inputs...");
+  Serial.println("Dave's Garage ThirdBrakeLight Startup");
+  Serial.println("-------------------------------------");
 
-	pinMode(LEFT_TURN_PIN,  INPUT_PULLDOWN);	
-	pinMode(RIGHT_TURN_PIN, INPUT_PULLDOWN);
-	pinMode(BACKUP_PIN,     INPUT_PULLDOWN);
-	pinMode(EMERGENCY_PIN,  INPUT_PULLDOWN);
+  Serial.println("Configuring Inputs...");
 
-	Serial.println("Attaching Interrupts to Inputs...");
+  // Active-LOW inputs: idle = HIGH (held by internal pull-up), asserted = LOW.
+  pinMode(LEFT_TURN_PIN, INPUT_PULLUP);
+  pinMode(RIGHT_TURN_PIN, INPUT_PULLUP);
+  pinMode(BACKUP_PIN, INPUT_PULLUP);
+  pinMode(EMERGENCY_PIN, INPUT_PULLUP);
 
-	attachInterrupt(digitalPinToInterrupt(LEFT_TURN_PIN),  LeftTurnIRQ,  CHANGE);
-	attachInterrupt(digitalPinToInterrupt(RIGHT_TURN_PIN), RightTurnIRQ, CHANGE);
-	attachInterrupt(digitalPinToInterrupt(BACKUP_PIN),     BackupIRQ,    CHANGE);
-	attachInterrupt(digitalPinToInterrupt(EMERGENCY_PIN),  EmergencyIRQ, CHANGE);
+  Serial.println("Attaching Interrupts to Inputs...");
 
-	Serial.println("Clearing Strip...");
+  attachInterrupt(digitalPinToInterrupt(LEFT_TURN_PIN), LeftTurnIRQ, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_TURN_PIN), RightTurnIRQ, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(BACKUP_PIN), BackupIRQ, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(EMERGENCY_PIN), EmergencyIRQ, CHANGE);
 
-	g_Strip.setBrightness(16);
-	for (uint16_t i = 0; i < NUM_LEDS; i++)
-		g_Strip.drawPixel(i, CRGB(0, 0, 0));
-	g_Strip.ShowStrip();
+  Serial.println("Clearing Strip...");
 
-	#if USE_TFT
-		#if SMALL_TFT
-			g_TFT.begin();
-			g_TFT.clear();
-		#else
-			g_TFT.begin();
-			g_TFT.fillScreen(tft.color565(12, 13, 62));
-			g_TFT.setFont(&FreeSans9pt7b);
-		#endif
-		TaskHandle_t uiTask;
-		xTaskCreateUniversal(displayLoop, "displayLoop", 2048, nullptr, 0, &uiTask, 0);
-	#endif
+  // Initialize FastLED here (NOT in the LEDStripGFX global constructor).
+  // Doing this before any strip draw calls ensures the ESP32-S3's RMT / I2C
+  // peripherals are in a known good state when the Heltec OLED is brought up.
+  g_Strip.Begin();
+
+  g_Strip.setBrightness(255);
+  for (uint16_t i = 0; i < NUM_LEDS; i++)
+    g_Strip.drawPixel(i, CRGB(0, 0, 0));
+  g_Strip.ShowStrip();
+
+  Serial.println("Starting Heltec V3 OLED...");
+  Heltec.begin(true, false, false);
+  // The Heltec library sets a default font internally, but be explicit so we
+  // never end up drawing with a null font pointer if init ordering changes.
+  Heltec.display->setFont(ArialMT_Plain_10);
+  Heltec.display->screenRotate(ANGLE_180_DEGREE);
+  DrawBootScreen();
+  Serial.println("Heltec V3 OLED initialized.");
+  TaskHandle_t uiTask;
+  // Bigger stack (SSD1306 framebuffer + I2C overhead) and priority 1 so the
+  // task isn't starved at IDLE priority. Match NightDriverStrip's pattern.
+  xTaskCreateUniversal(displayLoop, "displayLoop", 4096, nullptr, 1, &uiTask,
+                       0);
 }
 
 // processAndDisplayInputs()
-// 
+//
 // Main update loop
 
-void processAndDisplayInputs()
-{
-	g_Strip.fillScreen(BLACK16);
+void processAndDisplayInputs() {
+  g_Strip.fillScreen(BLACK16);
 
-	for (int i = 0; i < ARRAYSIZE(g_pAllEffects); i++)
-		g_pAllEffects[i]->CheckForButtonPress();
+  for (int i = 0; i < ARRAYSIZE(g_pAllEffects); i++)
+    g_pAllEffects[i]->CheckForButtonPress();
 
-	if (g_LeftTurn.GetActive() && g_RightTurn.GetActive())
-	{
-		if (g_LeftTurn.TimeElapsedTotal() < 0.05 && g_RightTurn.TimeElapsedTotal() < 0.05)
-		{
-			g_LeftTurn.SetActive(false);
-			g_RightTurn.SetActive(false);
-			g_Braking.Begin();
-		}
-	}
-	else if (g_Braking.GetActive() && digitalRead(LEFT_TURN_PIN) == LOW && digitalRead(RIGHT_TURN_PIN) == LOW)
-	{
-		g_Braking.End();
-	}
-	
-	for (int i = 0; i < ARRAYSIZE(g_pAllEffects); i++)
-		g_pAllEffects[i]->Draw();
+  if (g_LeftTurn.GetActive() && g_RightTurn.GetActive()) {
+    if (g_LeftTurn.TimeElapsedTotal() < 0.05 &&
+        g_RightTurn.TimeElapsedTotal() < 0.05) {
+      g_LeftTurn.SetActive(false);
+      g_RightTurn.SetActive(false);
+      g_Braking.Begin();
+    }
+  } else if (g_Braking.GetActive() && digitalRead(LEFT_TURN_PIN) == HIGH &&
+             digitalRead(RIGHT_TURN_PIN) == HIGH) {
+    g_Braking.End();
+  }
 
-	g_Strip.setBrightness(g_Brightness);
-	g_Strip.ShowStrip();
+  for (int i = 0; i < ARRAYSIZE(g_pAllEffects); i++)
+    g_pAllEffects[i]->Draw();
+
+  g_Strip.setBrightness(g_Brightness);
+  g_Strip.ShowStrip();
 }
 
 // loop
 //
 // Called repeatedly by Arduino framework, this is the main loop of the program
 
-void loop()
-{
-	static ulong frame = 0;
-	
-	frame++;
-	processAndDisplayInputs();
+void loop() {
+  static ulong frame = 0;
 
-	if (frame % 1000 == 0)
-	{
-		Serial.printf("Speed: %d fps\n", FastLED.getFPS());
-	}
-	delay(1);
-	return;
+  frame++;
+  processAndDisplayInputs();
+
+  // Continuous-but-throttled diagnostics. We don't want to print every single
+  // frame; ~20 lines/sec is plenty to follow.
+  if (frame % 50 == 0) {
+    Serial.printf(
+        "f=%lu  L:p=%d irq=%lu act=%d  R:p=%d irq=%lu act=%d  "
+        "Bk:p=%d irq=%lu act=%d  E:p=%d irq=%lu act=%d  Br:act=%d  fps=%d\n",
+        (unsigned long)frame,
+        digitalRead(LEFT_TURN_PIN),  (unsigned long)g_LeftTurn.GetIRQCount(),
+        g_LeftTurn.GetActive(),
+        digitalRead(RIGHT_TURN_PIN), (unsigned long)g_RightTurn.GetIRQCount(),
+        g_RightTurn.GetActive(),
+        digitalRead(BACKUP_PIN),     (unsigned long)g_Backup.GetIRQCount(),
+        g_Backup.GetActive(),
+        digitalRead(EMERGENCY_PIN),  (unsigned long)g_Emergency.GetIRQCount(),
+        g_Emergency.GetActive(),
+        g_Braking.GetActive(),
+        FastLED.getFPS());
+  }
+  delay(1);
+  return;
 }

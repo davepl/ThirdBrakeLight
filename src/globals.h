@@ -3,18 +3,15 @@
 #include <Arduino.h>
 #include <sys/time.h>
 
-#define USE_TFT          1
-#define SMALL_TFT        1
-
-#define MATRIX_WIDTH     70    
+#define MATRIX_WIDTH     288    
 #define MATRIX_HEIGHT    1
 
-#define LED_PIN          2
+#define LED_PIN          5
 
-#define LEFT_TURN_PIN    36
-#define RIGHT_TURN_PIN   37
-#define BACKUP_PIN       38
-#define EMERGENCY_PIN    39
+#define LEFT_TURN_PIN    2
+#define RIGHT_TURN_PIN   4
+#define BACKUP_PIN       6
+#define EMERGENCY_PIN    7
 
 #define NUMBER_USED_PIXELS  (MATRIX_WIDTH*MATRIX_HEIGHT) 
 #define NUMBER_TURN_PIXELS  (NUMBER_USED_PIXELS / 3.333)
@@ -26,8 +23,13 @@
 #define PERIOD_FROM_FREQ(f) (round(1000000 * (1.0 / f)))	// Calculate period in microseconds (us) from frequency in Hz
 #define FREQ_FROM_PERIOD(p) (1.0 / p * 1000000)				// Calculate frequency in Hz given the priod in microseconds (us)
 
+#ifndef MIN
 #define MIN(x, y)    ((x < y) ? x : y)
+#endif
+
+#ifndef MAX
 #define MAX(x, y)    ((x > y) ? x : y)
+#endif
 
 inline static double randomDouble(double lower, double upper)
 {

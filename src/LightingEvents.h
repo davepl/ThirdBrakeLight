@@ -85,6 +85,7 @@ protected:
     bool    			_hasIRQHandlerFiredYet = false;					
     int					_lastIRQButtonState = 0;
     int 				_debounceTimeout = 0;
+    volatile uint32_t   _irqCount = 0;       // total IRQs seen on this pin (diagnostic)
 
     uint8_t				_buttonPin1 = -1;
     uint8_t             _buttonPin2 = 0;
@@ -111,8 +112,12 @@ protected:
           _lastIRQButtonState = newState;						// Save last button state
           _debounceTimeout = xTaskGetTickCount(); 			    // This version of millis() that works from interrupt
           _hasIRQHandlerFiredYet=true;							// Increment count of IRQs in the current state
+          _irqCount++;
           portEXIT_CRITICAL_ISR(&_mux);
     }
+
+    uint8_t  GetPin()      const { return _buttonPin1; }
+    uint32_t GetIRQCount() const { return _irqCount; }
     
     // CheckForButtonPress
     //
@@ -145,13 +150,14 @@ protected:
             && (bCurrentState == saveLastIRQState) 			// pin is still in the same state as when intr triggered
             && (millis() - saveDebounceTimeout > DEBOUNCETIME ))
         { 	
-              if (bCurrentState == HIGH)
+              // Active-LOW inputs: asserted == LOW, released == HIGH.
+              if (bCurrentState == LOW)
               {
-                // If a second button is specified, we check to see that is is also down.  If no other button is
-                // specified, or if both are indeed down, we raise the Begin() method.  Not this precludes the use
-                // of Pin0 as an input, but that's not a good idea for other pin-strapping reasons anyway...	
+                // If a second button is specified, we check to see that it is
+                // ALSO asserted (LOW). If no second button is specified, or if
+                // both are asserted, raise Begin().
 
-                if (_buttonPin2 == 0 || (HIGH == digitalRead(_buttonPin2)))
+                if (_buttonPin2 == 0 || (LOW == digitalRead(_buttonPin2)))
                 {
                     Begin();
                 }
