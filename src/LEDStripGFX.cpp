@@ -9,7 +9,8 @@
 //   Provides a Adafruit_GFX implementation for our RGB LED panel so that
 //   we can use primitives such as lines and fills on it.
 //
-// History:     Oct-9-2018         Davepl      Created from other projects
+// History:     Oct-9-2018    Davepl      Created from other projects
+//              May-27-2026   Davepl      Adapted for Lincoln, Cleanup
 //
 //---------------------------------------------------------------------------
 
