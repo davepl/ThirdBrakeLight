@@ -10,6 +10,7 @@
 //   Implements each of the effects such as turning, braking, backup, etc.
 //
 // History:     Sat Aug 17 2019		Davepl		Created
+//              May-27-2026         Davepl      Adapted for Lincoln, Cleanup
 //
 // BUGS!  Not for use on public roadways.  For one thing, I'm pretty sure
 //        the signal would need to come on immediately rather than emulate
@@ -38,7 +39,8 @@ inline constexpr uint32_t AMBER5  = 0x100300;
 // to come on "all in" and then animate from there, based on what I see Audi and
 // others doing, anyway.
 
-inline const TProgmemRGBPalette16 SignalColors_p FL_PROGMEM = {
+inline const TProgmemRGBPalette16 SignalColors_p FL_PROGMEM = 
+{
     CRGB::Black, CRGB::Black, CRGB::Black, CRGB::Black, AMBERHI,
     AMBER1,      AMBER1,      AMBER2,      AMBER3,      AMBER4,
     AMBER5,      CRGB::Black, CRGB::Black, CRGB::Black, CRGB::Black,
@@ -72,8 +74,8 @@ protected:
     uint32_t          _lastIRQTimeMs         = 0;
     volatile uint32_t _irqCount              = 0; // total IRQs seen on this pin (diagnostic)
 
-    uint8_t _buttonPin1 = 0;
-    uint8_t _buttonPin2 = 0;
+    uint8_t _buttonPin1 = PIN_NONE;
+    uint8_t _buttonPin2 = PIN_NONE;
 
     static constexpr uint32_t DebounceMs = 30;
 
@@ -81,7 +83,7 @@ protected:
 
     bool SecondaryInputAllowsStart() const
     {
-        return _buttonPin2 == 0 || IsInputPressed(_buttonPin2);
+        return _buttonPin2 == PIN_NONE || IsInputPressed(_buttonPin2);
     }
 
     void AcknowledgePendingIRQ()
@@ -92,7 +94,7 @@ protected:
     }
 
 public:
-    LightingEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = 0)
+    LightingEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = PIN_NONE)
     {
         _pStrip     = pStrip;
         _eventStart = 0;
@@ -117,7 +119,7 @@ public:
 
     void SyncToInput()
     {
-        if (_buttonPin1 == 0)
+        if (_buttonPin1 == PIN_NONE)
             return;
 
         if (IsInputPressed(_buttonPin1) && SecondaryInputAllowsStart())
@@ -133,7 +135,7 @@ public:
 
     void CheckForButtonPress()
     {
-        if (_buttonPin1 == 0)
+        if (_buttonPin1 == PIN_NONE)
             return;
 
         int currentState = digitalRead(_buttonPin1);
@@ -206,7 +208,7 @@ class BackupEvent : public LightingEvent
     static constexpr float BloomTime = 0.25f;
 
 public:
-    BackupEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = 0)
+    BackupEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = PIN_NONE)
         : LightingEvent(pStrip, buttonPin1, buttonPin2)
     {
     }
@@ -243,7 +245,7 @@ class BrakingEvent : public LightingEvent
     static constexpr float BloomTime           = 0.25f;
 
 public:
-    BrakingEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = 0)
+    BrakingEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = PIN_NONE)
         : LightingEvent(pStrip, buttonPin1, buttonPin2)
     {
     }
@@ -318,7 +320,7 @@ private:
     Style _style = Style::Invalid;
 
 public:
-    SignalEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, Style style, uint8_t buttonPin2 = 0)
+    SignalEvent(LEDStripGFX* pStrip, uint8_t buttonPin1, Style style, uint8_t buttonPin2 = PIN_NONE)
         : LightingEvent(pStrip, buttonPin1, buttonPin2), _style(style)
     {
     }
@@ -481,7 +483,7 @@ class PoliceLightBar : public LightingEvent
     float _totalCycleTime = 0.0f;
 
 public:
-    PoliceLightBar(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = 0)
+    PoliceLightBar(LEDStripGFX* pStrip, uint8_t buttonPin1, uint8_t buttonPin2 = PIN_NONE)
         : LightingEvent(pStrip, buttonPin1, buttonPin2)
     {
         for (const auto& state : PoliceBarStates)
